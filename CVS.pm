@@ -1,538 +1,28 @@
-# $Id: CVS.pm,v 1.15 2001/03/11 17:16:14 barbee Exp $
-package Apache::CVS;
-
-use strict;
-
-$Apache::CVS::VERSION = '0.01';
-
-use Apache::URI();
-use Rcs();
-
-$Apache::CVS::content_type = q(text/html);
-%Apache::CVS::cvsroots;
-
-$Apache::CVS::rcs_ext;
-$Apache::CVS::def_rcs_ext = q(,v);
-$Apache::CVS::_workdir;
-$Apache::CVS::def_workdir = q(/var/tmp);
-$Apache::CVS::bindir;
-$Apache::CVS::def_bindir = q(/usr/bin);
-
-$Apache::CVS::seconds_in_minute = 60;
-$Apache::CVS::seconds_in_hour = 3600;
-$Apache::CVS::seconds_in_day = 86400;
-
-$| = 1;
-
-my @time_units = ('days', 'hours', 'minutes', 'seconds');
-
-sub print_text {
-
-    my $request = shift;
-
-    $request->print('<pre>');
-
-    my $line;
-    while ( $line = shift @_ ) {
-
-        $line =~ s/</&lt;/g;
-        $line =~ s/>/&gt;/g;
-        $request->print($line);
-    }
-
-    $request->print('</pre>');
-}
-
-sub setup_rcs {
-
-    my ($directory, $file) = @_;
-
-    my $rcs = Rcs->new;
-    Rcs->bindir($Apache::CVS::bindir);
-    Rcs->arcext($Apache::CVS::rcs_ext);
-    $rcs->rcsdir($directory);
-    $rcs->file($file);
-    $rcs->workdir($Apache::CVS::workdir);
-
-    return $rcs;
-}
-
-sub directory_contents {
-
-    my $directory = shift;
-
-    opendir DIR, $directory;
-    my @contents = readdir DIR;
-    closedir DIR;
-
-    # get rid of . and ..
-    @contents = grep { /^[^\.]/ } @contents;
-
-    my @directories =
-        grep { -d "$directory/$_" && -X "$directory/$_" && $_ } @contents;
-
-    my @files;
-
-    # get all the files from @content
-    # and put each into a file hash setting their name and full path
-    # create the rcs object
-    foreach (
-        grep { -f "$directory/$_" && -r "$directory/$_" && $_ } @contents
-    ) {
-
-        s/$Apache::CVS::rcs_ext$//;
-
-        push @files, {
-            'name'      => $_,
-            'full path' => "$directory/$_",
-            'rcs'       => setup_rcs($directory, $_)
-        };
-    }
-    
-    return \@directories, \@files;
-}
-
-sub print_directory {
-
-    my ($request, $uri_base, $directory) = @_;
-
-    my $uri = $uri_base . $directory;
-
-    $request->print( qq|
-        <td><a href=$uri>$directory</a></td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-    |);
-}
-
-sub time_diff {
-
-    my ($later, $earlier) = @_;
-
-    return undef unless $later >= $earlier;
-
-    my %time;
-
-    my $diff = $later - $earlier;
-
-    my $remainder = $diff % $Apache::CVS::seconds_in_day;
-    $time{'days'} = ($diff - $remainder) / $Apache::CVS::seconds_in_day;
-    $diff = $remainder;
-
-    my $remainder = $diff % $Apache::CVS::seconds_in_hour;
-    $time{'hours'} = ($diff - $remainder) / $Apache::CVS::seconds_in_hour;
-    $diff = $remainder;
-
-    my $remainder = $diff % $Apache::CVS::seconds_in_minute;
-    $time{'minutes'} = ($diff - $remainder) / $Apache::CVS::seconds_in_minute;
-    $time{'seconds'} = $remainder;
-
-    return \%time;
-}
-
-sub print_file {
-
-    my ($request, $uri_base, $file) = @_;
-
-    my $uri = $uri_base . $file->{'name'};
-
-    my ($author, @revisions, $number_of_revisions, $latest_revision, $last_revision_time, $revision_age);
-    eval {
-        $author = $file->{'rcs'}->author;
-        @revisions = $file->{'rcs'}->revisions;
-        $last_revision_time = $file->{'rcs'}->revdate;
-    };
-
-    my $html_row;
-    unless ( $@ ) {
-
-        $number_of_revisions = scalar @revisions;
-        $revision_age = time_diff(time, $last_revision_time);
-
-        my $age = join(', ', map { qq($revision_age->{$_} $_) } @time_units);
-
-        $last_revision_time = localtime($last_revision_time);
-
-        $html_row = qq(
-            <td><a href=$uri>$file->{'name'}</a></td>
-            <td>$author</td>
-            <td>$number_of_revisions</td>
-            <td>$revisions[0]</td>
-            <td>$last_revision_time</td>
-            <td>$age</td>
-        );
-    } else {
-        $html_row = qq(
-            <td>$file->{'name'}</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-        );
-    }
-
-    $request->print($html_row);
-}
-
-sub handle_directory {
-
-    my ($request, $uri_base, $directory) = @_;
-
-    my ($directories, $files) = directory_contents($directory);
-
-    $request->print( q|
-        <table border=1 cellpadding=2 cellspacing=0>
-        <tr>
-            <th>filename</th>
-            <th>author</th>
-            <th>number of revisions</th>
-            <th>latest revision</th>
-            <th>most recent revision date</th>
-            <th>revision age</th>
-        </tr>
-    |);
-
-    foreach ( @{ $directories } ) {
-
-        $request->print('<tr>');
-        print_directory($request, $uri_base, $_);
-        $request->print('</tr>');
-    }
-
-    foreach ( @{ $files } ) {
-
-        $request->print('<tr>');
-        print_file($request, $uri_base, $_);
-        $request->print('</tr>');
-    }
-
-    $request->print("</table>");
-}
-
-sub handle_file {
-
-    my ($request, $uri_base, $directory, $file, $diff_revision) = @_;
-
-    my $rcs = setup_rcs($directory, $file);
-
-    my %comments;
-    eval {
-        %comments = $rcs->comments;
-    };
-
-    if ( $@ ) {
-
-        $request->print("This doesn't look like a valid rcs file.");
-        $request->log_error("Invalid rcs file: $directory/$file.");
-        return;
-    }
-
-    $request->print($comments{'0'});
-
-    $request->print( q|
-        <table border=1 cellpadding=0 cellspacing=0>
-        <tr>
-            <th>revision number</th>
-            <th>author</th>
-            <th>state</th>
-            <th>symbol</th>
-            <th>date</th>
-            <th>age</th>
-            <th>comment</th>
-            <th>action</th>
-    |);
-
-    my $rev_num;
-    foreach $rev_num ( $rcs->revisions ) {
-        my ($author, $state, $symbol, $date, $comment);
-        eval {
-
-            $author = $rcs->author($rev_num);
-            $state = $rcs->state($rev_num);
-            $symbol = $rcs->symbol($rev_num);
-            $date = $rcs->revdate($rev_num);
-        };
-
-        $request->log_error("Unexpected error: $@") if $@;
-
-        my $revision_age = time_diff(time, $date);
-
-        my $age = join(', ', map { qq($revision_age->{$_} $_) } @time_units);
-
-        $date = localtime $date;
-
-        my $revision_uri = $uri_base . $file . qq(?r=$rev_num);
-        my $html_row = qq(
-            <tr>
-                <td><a href=$revision_uri>$rev_num</td>
-                <td>$author</td>
-                <td>$state</td>
-                <td>$symbol</td>
-                <td>$date</td>
-                <td>$age</td>
-                <td>$comments{$rev_num}</td>
-                <td>
-        );
-
-        if ( $rev_num eq $diff_revision ) {
-
-            $html_row .= q(selected for diff);
-        } else {
-
-            if ( $diff_revision ) {
-                $html_row .= qq(<a href=) . $uri_base . $file . qq(?ds=$diff_revision&dt=$rev_num>select for diff with $diff_revision</a>);
-            } else {
-                $html_row .= qq(<a href=) . $uri_base . $file . qq(?ds=$rev_num>select for diff</a>);
-            }
-        }
-                
-        $html_row .= qq(
-                </td>
-            </tr>
-        );
-
-        $request->print($html_row);
-    }
-
-    $request->print('</table>');
-}
-
-sub handle_revision {
-
-    my ($request, $uri_base, $rpath, $current_root, $directory, $file, $revision) = @_;
-
-    my $rcs = setup_rcs($directory, $file);
-
-    eval {
-        $rcs->co("-r$revision");
-    };
-
-    if ( $@ ) {
-
-        $request->print("Invalid rcs file.");
-        $request->log_error("Invalid rcs file.  $@");
-        return;
-    }
-
-    my $co_file = $rcs->workdir . q(/) .  $rcs->file;
-
-    open FILE, "$co_file";
-
-    my $content_type;
-    if ( -B $co_file ) {
-
-        my $subrequest = $request->lookup_file($co_file);
-        $content_type = $subrequest->content_type;
-        header($request, $co_file, $rpath, $current_root, $content_type);
-
-        my $fh = *FILE;
-        $request->send_fd($fh);
-    } else {
-
-        header($request, "$directory/$file", $rpath, $current_root);
-        print_text($request, <FILE>);
-    }
-    close FILE;
-
-    eval {
-        unlink $co_file;
-    };
-
-    $request->log_error("Unable to delete file: $@") if $@;
-}
-
-sub parent_link {
-
-    my ($request, $filename, $rpath, $current_root, $is_revision) = @_;
-
-    # strip out unnecessary stuff
-    $filename =~ s/$Apache::CVS::cvsroots{$current_root}//;
-#    $filename =~ s#[^/]*/?$## unless $is_revision;
-
-    # top / root / file
-    my $path = qq($rpath/$current_root$filename);
-
-    my $link = qq(<a href=$rpath>top</a>);
-    $link .= qq(:: <a href=$rpath/$current_root>$current_root</a>);
-
-    my $parents;
-    foreach ( split m#/#, $filename ) {
-
-        next unless $_;
-        $link .= qq(:: <a href="$rpath/$current_root$parents/$_">$_</a>);
-        $parents .= qq(/$_) if $_;
-    }
-
-    $request->print($link);
-}
-
-# reads in config file variables
-sub read_config {
-
-    my $request = shift;
-
-    %Apache::CVS::cvsroots = split /\s*(?:=>|,)\s*/, $request->dir_config('CVSRoots');
-
-    $Apache::CVS::rcs_ext = $request->dir_config('RCSExtension') || $Apache::CVS::def_rcs_ext;
-
-    $Apache::CVS::workdir = $request->dir_config('WorkingDirectory') || $Apache::CVS::def_workdir;
-    $Apache::CVS::bindir = $request->dir_config('BinaryDirectory') || $Apache::CVS::def_bindir;
-}
-
-sub handle_root {
-
-    my ($request, $rpath) = @_;
-
-    # display all cvs roots
-    $request->print('available cvs roots<p>');
-
-    foreach ( keys %Apache::CVS::cvsroots ) {
-
-        $request->print(qq|<a href="$rpath/$_">$_</a><br>|);
-    }
-
-    # bail
-}
-
-sub handle_diff {
-
-    my ($request, $directory, $file, $diff_source, $diff_target) = @_;
-
-    my $rcs = setup_rcs($directory, $file);
-
-    # make sure revision numbers are numbers
-    $diff_source =~ m#^(\d+(\.\d+)+)$#;
-    $diff_source = $1;
-    $diff_target =~ m#^(\d+(\.\d+)+)$#;
-    $diff_target = $1;
-
-    my @diff;
-    eval {
-        @diff = $rcs->rcsdiff("-r$diff_source", "-r$diff_target");
-    };
-
-    unless ( $@ ) {
-
-        print_text($request, @diff);
-    } else {
-
-        $request->print(qq|<p>Invalid rcs file.|);
-        $request->log_error(qq|<p>Invalid rcs file.  $@|);
-    }
-}
-
-sub header {
-    
-    my ($request, $filename, $rpath, $current_root, $content_type) = @_;
-
-    my $type = $content_type || $Apache::CVS::content_type;
-
-    $request->content_type($type);
-    $request->send_http_header;
-
-    # print a parent directory link
-    parent_link($request, $filename, $rpath, $current_root) unless $content_type;
-}
-
-sub handler {
-
-    my $request = shift;
-
-    delete $ENV{'PATH'};
-
-    read_config($request);
-
-    my $path_info = $request->path_info;
-    my $uri = $request->parsed_uri;
-    my $rpath = $uri->rpath;
-
-    my $is_real_root = 1 unless ( $path_info and $path_info ne '/' );
-
-    # strip off the cvs root id from the front
-    $path_info =~ s#/([^/]+)/?##;
-    my $current_root = $1;
-
-    # determine current filename
-    my $filename;
-    my $is_cvsroot;
-    unless ( $path_info and $path_info ne '/' ) {
-
-        $filename = $Apache::CVS::cvsroots{$current_root};
-        $is_cvsroot = 1;
-    } else {
-
-        $filename = $Apache::CVS::cvsroots{$current_root} . q(/) . $path_info;
-    }
-
-    my %query = $request->args;
-    my $is_revision = exists $query{'r'};
-
-    if ( $is_real_root ) {
-
-        header($request, $filename, $rpath, $current_root);
-        handle_root($request, $rpath);
-        return;
-    }
-
-    my $uri_base = $rpath . q(/) . $current_root . q(/) . $path_info;
-
-    if ( -d $filename ) {
-
-        header($request, $filename, $rpath, $current_root);
-        $uri_base .= q(/) unless $uri_base =~ /\/$/;
-        handle_directory($request, $uri_base, $filename);
-    } else {
-
-        $uri_base =~ s/[^\/]*$//;
-
-        $filename =~ /(\/([^\/]+\/)*)([^\/]*)/;
-
-        my $file_base = $1;
-        my $file_tail = $3;
-        $file_base =~ s/\/$//;
-
-        my %query = $request->args;
-        if ( $query{'ds'} && $query{'dt'} ) {
-
-            header($request, $filename, $rpath, $current_root);
-            handle_diff($request, $file_base, $file_tail, $query{'ds'}, $query{'dt'});
-        } elsif ( $is_revision ) {
-
-            handle_revision($request, $uri_base, $rpath, $current_root, $file_base, $file_tail, $query{'r'});
-        } else {
-
-            header($request, $filename, $rpath, $current_root);
-            handle_file($request, $uri_base, $file_base, $file_tail, $query{'ds'});
-        }
-    }
-}
-
-1;
-__END__
+# $Id: CVS.pm,v 1.19 2002/02/10 18:08:46 barbee Exp $
 
 =head1 NAME
 
-Apache::CVS - mod_perl content handler for CVS
+Apache::CVS - method handler provide a web interface to CVS repositories
 
 =head1 SYNOPSIS
 
     <Location /cvs>
         SetHandler perl-script
-        PerlHandler Apache::CVS
+        PerlHandler Apache::CVS::HTML
         PerlSetVar CVSRoots cvs1=>/usr/local/CVS
     </Location>
 
 =head1 DESCRIPTION
 
-Provides a web interface to CVS through a mod_perl content handler.
+C<Apache::CVS> is a method handler that provide a web interface to CVS
+repositories. Please see L<"CONFIGURATION"> to see what configuration options
+are available. To get started you'll at least need to set CVSRoots to your
+local CVS Root directory.
 
-=head1 DEPENDENCIES
-
-Rcs 0.09
+C<Apache::CVS> is does not output the contents of your CVS repository on its
+own. Rather, it is meant to be subclassed. A subclass that yields HTML output
+is provided with C<Apache::CVS::HTML>. Please see L<"SUBCLASSING"> for details
+on creating your own subclass.
 
 =head1 CONFIGURATION
 
@@ -563,12 +53,530 @@ Rcs 0.09
 
     PerlSetVar BinaryDirectory /usr/local/bin
 
-=head1 AUTHOR
+=cut
 
-John Barbee, jbarbee@pomona.edu
+package Apache::CVS;
+
+use strict;
+
+use Apache::URI();
+use Apache::CVS::RcsConfig();
+use Apache::CVS::PlainFile();
+use Apache::CVS::Directory();
+use Apache::CVS::File();
+use Apache::CVS::Revision();
+use Apache::CVS::Diff();
+
+$Apache::CVS::VERSION = '0.02';
+
+=head1 SUBCLASSING
+
+Override any or all of the following to customize the display.
+Some of these method will take a $uri_base as an argument. It is the URI for
+the current item that is being displayed. For example, if a directory is
+being displayed, the base URI is the URI to that directory. If a revision is
+being displayed, the base URI is the URI to that file.
+
+=over 4
+
+=item $self->print_http_header()
+
+Prints the HTTP headers. If you override this you should set the
+http_headers_sent flag with $self->http_headers_sent(1).
+
+=cut
+
+sub print_http_header {
+    my $self = shift;
+    return if $self->http_headers_sent();
+    $self->request()->content_type($self->content_type());
+    $self->request()->send_http_header;
+    $self->http_headers_sent(1);
+}
+
+=item print_error
+
+This method takes a string that contains the error.
+
+=cut
+
+sub print_error {
+    return;
+}
+
+=item print_page_header
+
+No arguments. If you override this you should set the page_headers_sent flag
+with $self->page_headers_sent().
+
+=cut
+
+sub print_page_header {
+    return;
+}
+
+=item print_page_footer
+
+No arguments.
+
+=cut
+
+sub print_page_footer {
+    return;
+}
+
+=item print_root_list_header
+
+No arguments.
+
+=cut
+
+sub print_root_list_header {
+    return;
+}
+
+=item print_root
+
+A root as a string, defined by your CVSRoots configuration.
+
+=cut
+
+sub print_root {
+    return;
+}
+
+=item print_root_list_footer
+
+No arguments.
+
+=cut
+
+sub print_root_list_footer {
+    return;
+}
+
+=item print_directory_list_header
+
+No arguments.
+
+=cut
+
+sub print_directory_list_header {
+    return;
+}
+
+=item print_directory
+
+Takes a base uri and an Apache::CVS::Directory object.
+
+=cut
+
+sub print_directory {
+    return;
+}
+
+=item print_file
+
+Takes a base uri and an Apache::CVS::File object.
+
+=cut
+
+sub print_file {
+    return;
+}
+
+=item print_plain_file
+
+Takes a base uri and an Apache::CVS::PlainFile object.
+
+=cut
+
+sub print_plain_file {
+    return;
+}
+
+=item print_directory_list_footer
+
+No arguments.
+
+=cut
+
+sub print_directory_list_footer {
+    return;
+}
+
+=item print_file_list_header
+
+No arguments.
+
+=cut
+
+sub print_file_list_header {
+    return;
+}
+
+=item print_revision
+
+Takes a base uri, an Apache::CVS::Revision object and the revision number of
+a revision that has been selected for diffing, if such exists.
+
+=cut
+
+sub print_revision {
+    return;
+}
+
+=item print_file_list_footer
+
+No arguments.
+
+=cut
+
+sub print_file_list_footer {
+    return;
+}
+
+=item print_text_revision
+
+Takes the content of the revision as a string.
+
+=cut
+
+sub print_text_revision {
+    return;
+}
+
+=item print_diff
+
+Takes an Apache::CVS::Diff object.
+
+=cut
+
+sub print_diff {
+    return;
+}
+
+=back
+
+=head1 OBJECT METHODS
+
+Here are some other methods that might be useful.
+
+=over 4
+
+=cut
+
+sub _get_roots {
+    my $request = shift;
+    my %cvsroots = split /\s*(?:=>|,)\s*/, $request->dir_config('CVSRoots');
+    return \%cvsroots;
+}
+
+sub _get_rcs_config {
+    my $request = shift;
+    return Apache::CVS::RcsConfig->new($request->dir_config('RCSExtension'),
+                                       $request->dir_config('WorkingDirectory'),
+                                       $request->dir_config('BinaryDirectory'));
+}
+
+sub new {
+    my $proto = shift;
+    my $class = ref($proto) || $proto;
+    my $request = shift;
+    my $self;
+
+    $self->{request} = $request;
+    $self->{rcs_config} = _get_rcs_config($self->{request});
+    $self->{roots} = _get_roots($self->{request});
+    $self->{content_type} = 'text/html';
+    $self->{http_headers_sent} = 0;
+    $self->{page_headers_sent} = 0;
+    $self->{current_root} = undef;
+    $self->{path} = undef;
+    bless ($self, $class);
+    return $self;
+}
+
+=item $self->request()
+
+Returns the Apache request object.
+
+=cut
+
+sub request {
+    my $self = shift;
+    $self->{request} = shift if scalar @_;
+    return $self->{request};
+}
+
+=item $self->rcs_config()
+
+Returns the C<Apache::CVS:RcsConfig> object that holds the Rcs configuration.
+
+=cut
+
+sub rcs_config {
+    my $self = shift;
+    return $self->{rcs_config};
+}
+
+=item $self->content_type()
+
+Set or get the content_type.
+
+=cut
+
+sub content_type {
+    my $self = shift;
+    $self->{content_type} = shift if scalar @_;
+    return $self->{content_type};
+}
+
+=item $self->http_headers_sent()
+
+Set or get this flag which indicates if the HTTP have been sent or not.
+
+=cut
+
+sub http_headers_sent {
+    my $self = shift;
+    $self->{http_headers_sent} = shift if scalar @_;
+    return $self->{http_headers_sent};
+}
+
+=item $self->page_headers_sent()
+
+Set or get this flag which indicates if the page headers have been sent or not.
+
+=cut
+
+sub page_headers_sent {
+    my $self = shift;
+    $self->{page_headers_sent} = shift if scalar @_;
+    return $self->{page_headers_sent};
+}
+
+=item $self->path()
+
+Set or get the path of to the file or directory requested.
+
+=cut
+
+sub path {
+    my $self = shift;
+    $self->{path} = shift if scalar @_;
+    return $self->{path};
+}
+
+=item $self->current_root()
+
+Set or get the CVS Root of the files being requested.
+
+=cut
+
+sub current_root {
+    my $self = shift;
+    $self->{current_root} = shift if scalar @_;
+    return $self->{current_root};
+}
+
+=item $self->roots()
+
+Returns the configured CVS Roots as a hash references.
+
+=cut
+
+sub roots {
+    my $self = shift;
+    return $self->{roots};
+}
+
+=item $self->current_root_path()
+
+Returns the path of the CVS Root of the files being requested.
+This is equivalent to $self->roots()->{$self->current_root()}.
+
+=cut
+
+sub current_root_path {
+    my $self = shift;
+    return $self->roots()->{$self->current_root()};
+}
+
+=back
+
+=cut
+
+sub handle_root {
+     my $self = shift;
+     $self->print_root($_) foreach ( keys %{ $self->roots()} );
+ }
+
+sub handle_directory {
+    my $self = shift;
+    my ($uri_base) = @_;
+    $self->print_directory_list_header();
+    my $directory = Apache::CVS::Directory->new($self->path(),
+                                                $self->rcs_config());
+    $directory->load();
+    my @blah = @{ $directory->directories() };
+    foreach ( @{ $directory->directories() } ) {
+        $self->print_directory($uri_base, $_);
+    }
+    foreach ( @{ $directory->files() } ) {
+        $self->print_file($uri_base, $_);
+    }
+    foreach ( @{ $directory->plain_files() } ) {
+        $self->print_plain_file($_);
+    }
+    $self->print_directory_list_footer();
+}
+
+sub handle_file {
+    my $self = shift;
+    my ($uri_base, $diff_revision) = @_;
+    $self->print_file_list_header();
+    my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
+    while ( my $revision = $file->revision('prev') ) {
+        $self->print_revision("$uri_base" . $file->name(), $revision,
+                              $diff_revision);
+    }
+    $self->print_file_list_footer();
+}
+
+sub handle_revision {
+    my $self = shift;
+    my ($uri_base, $revision) = @_;
+    
+    my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
+    my $revision = $file->revision($revision);
+
+    eval {
+        if ($revision->is_binary()) {
+            my $subrequest =
+                $self->request()->lookup_file($revision->co_file());
+            $self->content_type($subrequest->content_type);
+            $self->print_http_header();
+            $self->request()->send_fd($revision->filehandle());
+            close $self->filehandle();
+        } else {
+            $self->print_http_header();
+            $self->print_page_header();
+            $self->print_text_revision($revision->content());
+        }
+    };
+    if ($@) {
+        $self->request()->log_error($@);
+        $self->print_error("Unable to get revision.\n$@");
+        return;
+    }
+}
+
+sub handle_diff {
+    my $self = shift;
+    my ($source_version, $target_version) = @_;
+
+    my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
+    my $source = $file->revision($source_version);
+    my $target = $file->revision($target_version);
+    my $diff = Apache::CVS::Diff->new($source, $target);
+    $self->print_diff($diff);
+}
+
+sub handler_internal {
+    my $self = shift;
+
+    my $path_info = $self->request()->path_info;
+
+    my $is_real_root = 1 unless ( $path_info and $path_info ne '/' );
+
+    # strip off the cvs root id from the front
+    $path_info =~ s#/([^/]+)/?##;
+    $self->current_root($1);
+
+    # determine current path
+    my $is_cvsroot;
+    unless ( $path_info and $path_info ne '/' ) {
+
+        $self->path($self->current_root_path());
+        $is_cvsroot = 1;
+    } else {
+
+        $self->path($self->current_root_path() . q(/) .  $path_info);
+    }
+
+    my %query = $self->request()->args;
+    my $is_revision = exists $query{'r'};
+
+    if ( $is_real_root ) {
+
+        $self->print_http_header();
+        $self->print_page_header();
+        $self->handle_root();
+        return;
+    }
+
+    my $uri_base = $self->request()->parsed_uri->rpath() . q(/) .
+                   $self->current_root() . q(/) .  $path_info;
+
+    if ( -d $self->path() ) {
+
+        $self->print_http_header();
+        $self->print_page_header();
+        $uri_base .= q(/) unless $uri_base =~ /\/$/;
+        $self->handle_directory($uri_base);
+    } else {
+
+        $uri_base =~ s/[^\/]*$//;
+
+        my %query = $self->request()->args;
+        if ( $query{'ds'} && $query{'dt'} ) {
+            $self->print_http_header();
+            $self->print_page_header();
+            $self->handle_diff($query{'ds'}, $query{'dt'});
+        } elsif ( $is_revision ) {
+            $self->handle_revision($uri_base, $query{'r'});
+        } else {
+            $self->print_http_header();
+            $self->print_page_header();
+            $self->handle_file($uri_base, $query{'ds'});
+        }
+    }
+}
+
+sub handler($$) {
+
+    my ($self, $request) = @_;
+
+    delete $ENV{'PATH'};
+
+    $self = $self->new($request) unless ref $self;
+
+    eval {
+        $self->handler_internal();
+    };
+
+    if ($@) {
+        $self->request()->log_error($@);
+        $self->print_error($@);
+    }
+}
 
 =head1 SEE ALSO
 
-perl(1), Rcs(3).
+L<Apache::CVS::HTML>, L<Rcs>
+
+=head1 AUTHOR
+
+John Barbee <F<barbee@veribox.net>>
+
+=head1 COPYRIGHT
+
+Copyright 2001-2002 John Barbee
+
+This library is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
 
 =cut
+
+1;

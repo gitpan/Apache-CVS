@@ -1,6 +1,13 @@
-CVS.pm
 Changes
 MANIFEST
 Makefile.PL
 test.pl
 httpd.conf
+CVS/Diff.pm
+CVS/Directory.pm
+CVS/File.pm
+CVS/HTML.pm
+CVS/PlainFile.pm
+CVS/RcsConfig.pm
+CVS/Revision.pm
+CVS.pm
