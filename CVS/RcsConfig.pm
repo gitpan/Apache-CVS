@@ -1,4 +1,4 @@
-# $Id: RcsConfig.pm,v 1.1 2002/02/10 04:15:53 barbee Exp $
+# $Id: RcsConfig.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
 
 =head1 NAME
 
@@ -26,7 +26,7 @@ object.
 package Apache::CVS::RcsConfig;
 use strict;
 
-$Apache::CVS::RcsConfig::VERSION = '0.02';
+$Apache::CVS::RcsConfig::VERSION = $Apache::CVS::VERSION;
 
 =item $config = Apache::CVS::RcsConfig->new([$extension], [$working_directory], [$rcs_binary_directory])
 

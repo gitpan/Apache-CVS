@@ -1,4 +1,4 @@
-# $Id: File.pm,v 1.1 2002/02/10 04:14:01 barbee Exp $
+# $Id: File.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
 
 =head1 NAME
 
@@ -37,7 +37,7 @@ use Apache::CVS::File();
 use Apache::CVS::Revision();
 @Apache::CVS::File::ISA = ('Apache::CVS::PlainFile');
 
-$Apache::CVS::File::VERSION = '0.02';
+$Apache::CVS::File::VERSION = $Apache::CVS::VERSION;;
 
 =item Apache::CVS::File->new($path, $rcs_config)
 

@@ -1,4 +1,4 @@
-# $Id: HTML.pm,v 1.2 2002/02/10 18:05:16 barbee Exp $
+# $Id: HTML.pm,v 1.3 2002/04/23 04:18:28 barbee Exp $
 
 =head1 NAME
 
@@ -29,7 +29,7 @@ use strict;
 use Apache::CVS();
 @Apache::CVS::HTML::ISA = ('Apache::CVS');
 
-$Apache::CVS::HTML::VERSION = '0.02';
+$Apache::CVS::HTML::VERSION = $Apache::CVS::VERSION;;
 
 my @time_units = ('days', 'hours', 'minutes', 'seconds');
 
@@ -230,8 +230,7 @@ sub print_text_revision {
 }
 
 sub print_diff {
-    my $self = shift;
-    my $diff = shift;
+    my ($self, $diff, $uri_base) = @_;
     my @content;
 
     eval {
@@ -249,6 +248,24 @@ sub print_diff {
     unless (scalar @content) {
         $self->request()->print('There is no difference between the versions.');
         return;
+    }
+    if (scalar keys %{ $self->diff_styles()} > 1) {
+        # print a bunch of links for the different diff styles
+        my ($source_revision, $target_revision);
+        eval {
+            $source_revision = $diff->source()->number();
+            $target_revision = $diff->target()->number();
+        };
+        if ($@) {
+            $self->request()->log_error($@);
+            $self->print_http_header();
+            $self->print_page_header();
+            $self->request()->print("<p>Unable to get diff.<br>$@");
+            $self->print_page_footer();
+            return;
+        }
+        $self->request()->print(qq|<td><a href="$uri_base?ds=$source_revision&dt=$target_revision&dy=$_">$_</a>&nbsp;|) foreach keys %{ $self->diff_styles()};
+        $self->request()->print(qq|<br>|);
     }
     $self->request()->print('<pre>');
     while (my $line = shift @content) {

@@ -1,4 +1,4 @@
-# $Id: Diff.pm,v 1.1 2002/02/10 04:13:16 barbee Exp $
+# $Id: Diff.pm,v 1.2 2002/04/23 04:18:28 barbee Exp $
 
 =head1 NAME
 
@@ -9,7 +9,7 @@ Apache::CVS::Diff - class that implements a CVS diff
  use Apache::CVS::File();
  use Apache::CVS::Diff();
 
- $diff = Apache::CVS::Diff->new($source, $target);
+ $diff = Apache::CVS::Diff->new($source, $target, $style);
  @content = @{ $diff->content() };
 
 =head1 DESCRIPTION
@@ -25,12 +25,13 @@ package Apache::CVS::Diff;
 
 use strict;
 
-$Apache::CVS::Diff::VERSION = '0.02';
+$Apache::CVS::Diff::VERSION = $Apache::CVS::VERSION;;
 
-=item $diff = Apache::CVS::Diff->new($source, $target)
+=item $diff = Apache::CVS::Diff->new($source, $target, $styles)
 
-Construct a new C<Apache::CVS::Diff> object. The arguments should be instances
-of C<Apache::CVS::Version>.
+Construct a new C<Apache::CVS::Diff> object. The first two arguments should be
+instancesof C<Apache::CVS::Version>. The third is the arguments to rcsdiff(1).
+The style defaults to 'ua'.
 
 =cut
 
@@ -41,6 +42,8 @@ sub new {
 
     $self->{source} = shift;
     $self->{target} = shift;
+    $self->{style} = shift;
+    $self->{default_style} = shift;
     $self->{content} = undef;
 
     bless ($self, $class);
@@ -73,15 +76,28 @@ sub load {
     my $self = shift;
     my @content;
     eval {
-        @content = $self->source()->rcs()->rcsdiff('-ua -r' .
-                                                   $self->source()->number(),
-                                                   '-r' .
-                                                   $self->target()->number());
+        @content =
+            $self->source()->rcs()->rcsdiff('-' . $self->style() . ' -r' .
+                                            $self->source()->number(), '-r' .
+                                            $self->target()->number());
     };
     if ($@) {
         die 'Apache::CVS::Diff ' . $@;
     }
     $self->content(\@content);
+}
+
+=item $diff->style()
+
+Returns or set the style of the diff.
+
+=cut
+
+sub style {
+    my $self = shift;
+    $self->{style} = shift if scalar @_;
+    $self->{style} = 'ua' unless $self->{style};
+    return $self->{style};
 }
 
 =item $diff->content()

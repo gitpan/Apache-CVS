@@ -1,4 +1,4 @@
-# $Id: Revision.pm,v 1.1 2002/02/10 04:16:19 barbee Exp $
+# $Id: Revision.pm,v 1.3 2002/04/23 04:19:05 barbee Exp $
 
 =head1 NAME
 
@@ -35,7 +35,7 @@ package Apache::CVS::Revision;
 
 use strict;
 
-$Apache::CVS::Revision::VERSION = '0.02';
+$Apache::CVS::Revision::VERSION = $Apache::CVS::VERSION;
 
 sub _new_rcs {
     my ($rcs, $revision) = @_;
@@ -173,11 +173,11 @@ sub time_diff {
     $time{days} = ($diff - $remainder) / $seconds_in_day;
     $diff = $remainder;
 
-    my $remainder = $diff % $seconds_in_hour;
+    $remainder = $diff % $seconds_in_hour;
     $time{hours} = ($diff - $remainder) / $seconds_in_hour;
     $diff = $remainder;
 
-    my $remainder = $diff % $seconds_in_minute;
+    $remainder = $diff % $seconds_in_minute;
     $time{minutes} = ($diff - $remainder) / $seconds_in_minute;
     $time{seconds} = $remainder;
 

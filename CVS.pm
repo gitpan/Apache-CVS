@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.19 2002/02/10 18:08:46 barbee Exp $
+# $Id: CVS.pm,v 1.20 2002/04/23 04:18:28 barbee Exp $
 
 =head1 NAME
 
@@ -53,6 +53,22 @@ on creating your own subclass.
 
     PerlSetVar BinaryDirectory /usr/local/bin
 
+=item DiffStyles
+
+    The different types of diffs you want to provide to users.
+    The values will be passed to cvs diff as arguments. If not
+    set users will see a unified diff.
+
+    PerlSetVar DiffStyles unified=>ua,side-by-side=>ya
+
+=item DefaultDiffStyle
+
+    The default diff style. The value must be a valid predefined
+    DiffStyle.  If not set or set incorrectly Apache::CVS will default to
+    the first DiffStyle.
+
+    PerlSetVar DefaultDiffStyle unified
+
 =cut
 
 package Apache::CVS;
@@ -67,7 +83,7 @@ use Apache::CVS::File();
 use Apache::CVS::Revision();
 use Apache::CVS::Diff();
 
-$Apache::CVS::VERSION = '0.02';
+$Apache::CVS::VERSION = '0.03';
 
 =head1 SUBCLASSING
 
@@ -248,7 +264,7 @@ sub print_text_revision {
 
 =item print_diff
 
-Takes an Apache::CVS::Diff object.
+Takes an Apache::CVS::Diff object and a base uri.
 
 =cut
 
@@ -279,6 +295,42 @@ sub _get_rcs_config {
                                        $request->dir_config('BinaryDirectory'));
 }
 
+sub _get_diff_styles {
+    my $request = shift;
+    my %styles = split /\s*(?:=>|,)\s*/, $request->dir_config('DiffStyles');
+
+    # default style
+    $styles{unified} = 'ua' unless scalar keys %styles;
+    return \%styles;
+}
+
+sub _get_default_diff_style {
+    my $request = shift;
+    my $styles = shift;
+    my $default = $request->dir_config('DefaultDiffStyle');
+
+    # if directive not set or style is not set up then grab a style
+    # from the list
+    unless ($default && exists($styles->{$default})) {
+        if (scalar keys %{ $styles} == 1) {
+            # if there is only one style we can stop here
+            $default = (keys %{ $styles})[0];
+        } else {
+            # otherwise parse the DiffStyles directive for the first style
+            $request->dir_config('DiffStyles') =~ /([^\s=,]*)/;
+            $default = $1;
+        }
+    }
+    # we absolutely must have a valid default, so we should check our
+    # work
+    unless (exists(${$styles}{$default})) {
+        # alright, so we screwed up somewhere, fallback to the first
+        # style
+        $default = (keys %{ $styles})[0];
+    }
+    return $default;
+}
+
 sub new {
     my $proto = shift;
     my $class = ref($proto) || $proto;
@@ -293,6 +345,9 @@ sub new {
     $self->{page_headers_sent} = 0;
     $self->{current_root} = undef;
     $self->{path} = undef;
+    $self->{diff_styles} = _get_diff_styles($self->{request});
+    $self->{default_diff_style} =
+        _get_default_diff_style($self->{request}, $self->{diff_styles});
     bless ($self, $class);
     return $self;
 }
@@ -391,6 +446,30 @@ sub roots {
     return $self->{roots};
 }
 
+=item $self->diff_styles()
+
+Returns the different styles of diff that will be available.
+
+=cut
+
+sub diff_styles {
+    my $self = shift;
+    $self->{diff_styles} = shift if scalar @_;
+    return $self->{diff_styles};
+}
+
+=item $self->default_diff_style()
+
+Returns the default diff styles.
+
+=cut
+
+sub default_diff_style {
+    my $self = shift;
+    $self->{default_diff_style} = shift if scalar @_;
+    return $self->{default_diff_style};
+}   
+
 =item $self->current_root_path()
 
 Returns the path of the CVS Root of the files being requested.
@@ -474,13 +553,15 @@ sub handle_revision {
 
 sub handle_diff {
     my $self = shift;
-    my ($source_version, $target_version) = @_;
+    my ($source_version, $target_version, $diff_style, $uri_base) = @_;
 
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
     my $source = $file->revision($source_version);
     my $target = $file->revision($target_version);
-    my $diff = Apache::CVS::Diff->new($source, $target);
-    $self->print_diff($diff);
+    $diff_style ||= $self->default_diff_style();
+    my $diff = Apache::CVS::Diff->new($source, $target,
+                                      $self->diff_styles()->{$diff_style});
+    $self->print_diff($diff, $uri_base . $file->name());
 }
 
 sub handler_internal {
@@ -533,7 +614,8 @@ sub handler_internal {
         if ( $query{'ds'} && $query{'dt'} ) {
             $self->print_http_header();
             $self->print_page_header();
-            $self->handle_diff($query{'ds'}, $query{'dt'});
+            $self->handle_diff($query{'ds'}, $query{'dt'}, $query{dy},
+                               $uri_base);
         } elsif ( $is_revision ) {
             $self->handle_revision($uri_base, $query{'r'});
         } else {

@@ -1,4 +1,4 @@
-# $Id: PlainFile.pm,v 1.1 2002/02/10 04:15:19 barbee Exp $
+# $Id: PlainFile.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
 
 =head1 NAME
 
@@ -27,7 +27,7 @@ package Apache::CVS::PlainFile;
 
 use strict;
 
-$Apache::CVS::PlainFile::VERSION = '0.02';
+$Apache::CVS::PlainFile::VERSION = $Apache::CVS::VERSION;
 
 =item $file = Apache::CVS::PlainFile->new($path)
 

@@ -1,4 +1,4 @@
-# $Id: Directory.pm,v 1.1 2002/02/10 04:13:41 barbee Exp $
+# $Id: Directory.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
 
 =head1 NAME
 
@@ -30,7 +30,7 @@ use Apache::CVS::PlainFile();
 use Apache::CVS::File();
 @Apache::CVS::Directory::ISA = ('Apache::CVS::PlainFile');
 
-$Apache::CVS::Directory::VERSION = '0.02';
+$Apache::CVS::Directory::VERSION = $Apache::CVS::VERSION;;
 
 =item $directory = Apache::CVS::Directory($path, $rcs_config)
 
