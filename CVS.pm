@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.25 2002/09/22 14:50:59 barbee Exp $
+# $Id: CVS.pm,v 1.27 2002/11/12 04:09:39 barbee Exp $
 
 =head1 NAME
 
@@ -84,7 +84,7 @@ use Apache::CVS::Revision();
 use Apache::CVS::Diff();
 use Apache::CVS::Graph();
 
-$Apache::CVS::VERSION = '0.06';
+$Apache::CVS::VERSION = '0.07';
 
 =head1 SUBCLASSING
 
@@ -430,7 +430,15 @@ Set or get the path of to the file or directory requested.
 
 sub path {
     my $self = shift;
-    $self->{path} = shift if scalar @_;
+    if (scalar @_) {
+        $self->{path} = shift;
+        my $real_file_path = $self->{path} . $self->rcs_config()->extension();
+        unless (-d $self->{path}  || -r $real_file_path) {
+            die "File or directory ($self->{path} or $real_file_path) does " .
+                "not exist.";
+        }
+    }
+
     return $self->{path};
 }
 
@@ -577,7 +585,6 @@ sub handle_diff {
 
 sub handle_graph {
     my $self = shift;
-    $self->request()->log_error("Handling graph");
     my $uri_base = shift;
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
     my $graph = Apache::CVS::Graph->new($file);
@@ -590,6 +597,14 @@ sub handler_internal {
     my $path_info = $self->request()->path_info;
 
     my $is_real_root = 1 unless ( $path_info and $path_info ne '/' );
+
+    if ( $is_real_root ) {
+
+        $self->print_http_header();
+        $self->print_page_header();
+        $self->handle_root();
+        return;
+    }
 
     # strip off the cvs root id from the front
     $path_info =~ s#/([^/]+)/?##;
@@ -608,14 +623,6 @@ sub handler_internal {
 
     my %query = $self->request()->args;
     my $is_revision = exists $query{'r'};
-
-    if ( $is_real_root ) {
-
-        $self->print_http_header();
-        $self->print_page_header();
-        $self->handle_root();
-        return;
-    }
 
     my $uri_base = $self->request()->parsed_uri->rpath() . q(/) .
                    $self->current_root() . q(/) .  $path_info;

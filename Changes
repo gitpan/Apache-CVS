@@ -1,6 +1,10 @@
-$Id: Changes,v 1.6 2002/09/22 14:50:59 barbee Exp $
+$Id: Changes,v 1.7 2002/11/12 03:38:00 barbee Exp $
 
 Revision history for Perl extension Apache::CVS.
+
+0.07
+    - Fixed bug with graph when a file has more than 9 revisions.
+    - Fixed recursion bug when printing the error after an exception is caught.
 
 0.06  Sun Sep 22 07:31:09 PDT 2002
     - Dammit. Copy and paste error in the Makefile.PL. One more time.

@@ -1,4 +1,4 @@
-# $Id: File.pm,v 1.3 2002/09/17 06:20:51 barbee Exp $
+# $Id: File.pm,v 1.4 2002/11/12 03:45:35 barbee Exp $
 
 =head1 NAME
 
@@ -6,7 +6,6 @@ Apache::CVS::File - class that implements a versioned file
 
 =head1 SYNOPSIS
 
- use Apache::CVS::Rcs();
  use Apache::CVS::RcsConfig();
  use Apache::CVS::File();
  use Apache::CVS::Revision();

@@ -1,4 +1,4 @@
-# $Id: HTML.pm,v 1.4 2002/09/17 06:24:27 barbee Exp $
+# $Id: HTML.pm,v 1.5 2002/11/12 03:36:08 barbee Exp $
 
 =head1 NAME
 
@@ -40,8 +40,8 @@ sub print_error {
     $self->print_http_header();
     $self->print_page_header();
     $error =~ s/\n/<br>/g;
-    $self->print_error($error);
-    $self->print_html_footer();
+    $self->request()->print($error);
+    $self->print_page_footer();
 }
 
 sub print_page_header {

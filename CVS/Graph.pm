@@ -1,4 +1,4 @@
-# $Id: Graph.pm,v 1.1 2002/09/17 06:26:10 barbee Exp $
+# $Id: Graph.pm,v 1.2 2002/11/12 03:36:40 barbee Exp $
 
 =head1 NAME
 
@@ -124,9 +124,13 @@ sub _create_vertex {
         return $vertex_id;
     }
 
-    if ($vertex_id =~ /[^1]$/) {
+    # if revision isn't x.1, then the parent is one fewer.
+    if ($vertex_id =~ /(?<=\.)(\d{2,}|[^1])$/) {
+        # $& should only include the trailing '1'
         my $minus_one = $& - 1;
         $parent_id = $` . $minus_one;
+    # otherwise this is the first branch revision, so the parent is the branch
+    # root revision
     } else {
         $parent_id =~ s#(\.\d){2}$##;
     }
