@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.32 2003/01/28 21:51:42 barbee Exp $
+# $Id: CVS.pm,v 1.35 2003/12/07 00:00:37 barbee Exp $
 
 =head1 NAME
 
@@ -25,6 +25,8 @@ is provided with C<Apache::CVS::HTML>. Please see L<"SUBCLASSING"> for details
 on creating your own subclass.
 
 =head1 CONFIGURATION
+
+Please see C<Apache::CVS::HTML> for some extra configuration parameters specific to HTML display. 
 
 =item CVSRoots
 
@@ -89,7 +91,7 @@ if ($@) {
     $Apache::CVS::Graph = 1;
 }
 
-$Apache::CVS::VERSION = '0.08';
+$Apache::CVS::VERSION = '0.09';
 
 =head1 SUBCLASSING
 
@@ -191,7 +193,7 @@ sub print_directory_list_header {
 
 =item print_directory
 
-Takes a base uri and an Apache::CVS::Directory object.
+Takes a base uri, an Apache::CVS::Directory object, and a row number.
 
 =cut
 
@@ -201,7 +203,7 @@ sub print_directory {
 
 =item print_file
 
-Takes a base uri and an Apache::CVS::File object.
+Takes a base uri, an Apache::CVS::File object, and a row number.
 
 =cut
 
@@ -222,7 +224,7 @@ sub sort_files {
 
 =item print_plain_file
 
-Takes a base uri and an Apache::CVS::PlainFile object.
+Takes a base uri, an Apache::CVS::PlainFile object, and a row number.
 
 =cut
 
@@ -254,8 +256,9 @@ sub print_file_list_header {
 
 =item print_revision
 
-Takes a base uri, an Apache::CVS::Revision object and the revision number of
-a revision that has been selected for diffing, if such exists.
+Takes a base uri, an Apache::CVS::Revision object, a row number  and the
+revision number of a revision that has been selected for diffing, if such
+exists.
 
 =cut
 
@@ -572,6 +575,7 @@ sub handle_root {
 
 sub handle_directory {
     my $self = shift;
+    my $row_counter = 0;
     my ($uri_base, $sort_criterion, $sort_direction) = @_;
     $self->print_directory_list_header($uri_base, $sort_criterion,
                                        $sort_direction);
@@ -579,7 +583,8 @@ sub handle_directory {
                                                 $self->rcs_config());
     $directory->load();
     foreach ( @{ $directory->directories() } ) {
-        $self->print_directory($uri_base, $_);
+        $self->print_directory($uri_base, $_, $row_counter);
+        $row_counter++;
     }
 
     my $sorted_files = $directory->files();
@@ -588,11 +593,13 @@ sub handle_directory {
                                           $sort_direction);
     }
     foreach ( @{ $sorted_files } ) {
-        $self->print_file($uri_base, $_);
+        $self->print_file($uri_base, $_, $row_counter);
+        $row_counter++;
     }
 
     foreach ( @{ $directory->plain_files() } ) {
         $self->print_plain_file($_);
+        $row_counter++;
     }
     $self->print_directory_list_footer();
 }
@@ -601,6 +608,7 @@ sub handle_file {
     my $self = shift;
     my ($uri_base, $diff_revision, $sort_criterion, $sort_direction) = @_;
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
+    my $row_counter = 0;
 
     $uri_base .= $file->name();
     $self->print_file_list_header($uri_base, $sort_criterion, $sort_direction);
@@ -611,12 +619,15 @@ sub handle_file {
                                                      $sort_criterion,
                                                      $sort_direction);
         foreach ( @{ $sorted_revisions }) {
-            $self->print_revision($uri_base, $_, $diff_revision);
+            $self->print_revision($uri_base, $_, $row_counter, $diff_revision);
+            $row_counter++;
         }
     # otherwise, just use old behavior where we iterate through revisions
     } else {
         while ( my $revision = $file->revision('prev') ) {
-            $self->print_revision($uri_base, $revision, $diff_revision);
+            $self->print_revision($uri_base, $revision, $row_counter,
+                                  $diff_revision);
+            $row_counter++;
         }
     }
     $self->print_file_list_footer();

@@ -11,7 +11,8 @@ o make install
 QUICKSTART
 
 See the sample httpd.conf in the same directory as CVS.pm, slap it into your
-real httpd.conf, replace /usr/local/CVS with your CVSROOT, restart Apache.
+real httpd.conf, replace /usr/local/CVS with your CVSROOT, copy apache_cvs.css
+to your DocumentRoot, restart Apache.
 
 DOCUMENTATION
 

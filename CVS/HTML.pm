@@ -1,4 +1,4 @@
-# $Id: HTML.pm,v 1.8 2003/01/28 22:15:40 barbee Exp $
+# $Id: HTML.pm,v 1.11 2003/12/07 00:00:05 barbee Exp $
 
 =head1 NAME
 
@@ -10,6 +10,7 @@ Apache::CVS::HTML - subclass of Apache::CVS that prints HTML
         SetHandler perl-script
         PerlHandler Apache::CVS::HTML
         PerlSetVar CVSRoots cvs1=>/usr/local/CVS
+        PerlSetVar CSSFile /apache_cvs.css
     </Location>
 
 =head1 DESCRIPTION
@@ -19,6 +20,62 @@ definitive documentation. C<Apache::CVS::HTML> override all of the print_*
 methods to display directories, files and revisions in HTML tables. Diffs
 are displayed as plain text. There is also a little directory indicator at the
 top of every page.
+
+=head1 APACHE CONFIGURATION
+
+=item CSSFile
+
+    Path to a Cascading Stylesheet File. A default CSS file is
+    provided with this distribution.
+
+    PerlSetVar CSSFile /apache_cvs.css
+
+=head1 CSS CONFIGURATION
+
+The format of the CSS class below are:
+    I<name> (B<HTML tag>, B<where this class shows up>)
+
+=item root_link (anchor, everywhere)
+
+=item path_link (anchor, everywhere)
+
+=item directory_link (anchor, directory listings)
+
+=item file_link (anchor, directory listings)
+
+=item graph_link (anchor, file listings)
+
+=item revision_link (anchor, file listings, graph display)
+
+=item directory_sort_link (anchor, directory listinsg)
+
+=item file_sort_link  (anchor, file listings)
+
+=item diff_link (anchor, file listinsg)
+
+=item directory_table (table, directory listing)
+
+=item directory_header_row (tr, directory listing)
+
+=item directory_header (th, directory listing)
+
+=item directory_odd_row (tr, directory listing)
+
+=item directory_even_row (tr, directory listing)
+
+=item directory_data (td, directory listing)
+
+=item file_table (table, file listing)
+
+=item file_header_row (tr, file listing)
+
+=item file_header (th, file listing)
+
+=item file_odd_row (tr, file listing)
+
+=item file_even_row (tr, file listing)
+
+=item file_data (td, file listing)
 
 =cut
 
@@ -36,19 +93,50 @@ if ($Apache::CVS::Graph) {
 $Apache::CVS::HTML::VERSION = $Apache::CVS::VERSION;;
 
 my @time_units = ('days', 'hours', 'minutes', 'seconds');
-my @directory_headers = ('filename', 'author', 'number of revisions', 'latest revision', 'most recent revision date', 'revision age');
+my @directory_headers = ('filename', 'author', 'number of revisions',
+                         'latest revision', 'most recent revision date',
+                         'revision age');
 my %directory_sorting = (
     'filename' => 'f',
     'author' => 'a',
     'number of revisions' => 'n',
     'most recent revision date' => 'm'
 );
-my @file_headers = ('revision number', 'author', 'state', 'symbol', 'date', 'age', 'comment', 'action');
+my @file_headers = ('revision number', 'author', 'state', 'symbol', 'date',
+                    'age', 'comment', 'action');
 my %file_sorting = (
     'revision number' => 'r',
     'author' => 'a',
     'state' => 's',
     'date' => 'd',
+);
+my %css_class = (
+    # anchors
+    'root_link' =>      'root_link',
+    'path_link' =>      'path_link',
+    'directory_link' => 'directory_link',
+    'file_link' =>      'file_link',
+    'graph_link' =>     'graph_link',
+    'revision_link' =>  'revision_link',
+    'diff_link' =>      'diff_link',
+    'file_sort_link' =>  'file_sort_link',
+    'directory_sort_link' =>  'directory_sort_link',
+
+    # directory table
+    'directory_table' =>      'directory_table',
+    'directory_header_row' => 'directory_header_row',
+    'directory_header' =>     'directory_header',
+    'directory_odd_row' =>    'directory_odd_row',
+    'directory_even_row' =>   'directory_even_row',
+    'directory_data' =>       'directory_data',
+
+    # file table
+    'file_table' =>      'file_table',
+    'file_header_row' => 'file_header_row',
+    'file_header' =>     'file_header',
+    'file_odd_row' =>    'file_odd_row',
+    'file_even_row' =>   'file_even_row',
+    'file_data' =>       'file_data',
 );
 
 sub new {
@@ -58,6 +146,7 @@ sub new {
 
     $self->file_sorting_available(1);
     $self->revision_sorting_available(1);
+    $self->{css_file} = $self->request()->dir_config('CSSFile');
 
     bless ($self, $class);
     return $self;
@@ -177,6 +266,9 @@ sub print_page_header {
     return if $self->page_headers_sent();
     $self->request()->print('<html>
                              <head>
+                                <link rel="stylesheet" type="text/css" href="');
+    $self->request()->print($self->{css_file});
+    $self->request()->print('">
                                 <title>Apache::CVS</title>
                              </head>
                              <body bgcolor=white>');
@@ -203,14 +295,14 @@ sub print_path_links {
     # top / root / file
     my $path = qq($rpath/$cvsroot$filename);
 
-    my $link = qq(<a href=$rpath>top</a>);
-    $link .= qq(:: <a href=$rpath/$cvsroot>$cvsroot</a>);
+    my $link = qq(<a class=$css_class{path_link} href=$rpath>top</a>);
+    $link .= qq(:: <a class=$css_class{path_link} href=$rpath/$cvsroot>$cvsroot</a>);
 
     my $parents;
     foreach ( split m#/#, $filename ) {
 
         next unless $_;
-        $link .= qq(:: <a href="$rpath/$cvsroot$parents/$_">$_</a>);
+        $link .= qq(:: <a class=$css_class{path_link} href="$rpath/$cvsroot$parents/$_">$_</a>);
         $parents .= qq(/$_) if $_;
     }
 
@@ -222,7 +314,7 @@ sub print_path_links {
 sub print_root {
     my $self = shift;
     my $root = shift;
-    $self->request()->print('<a href="' .
+    $self->request()->print('<a class=$css_class{root_link} href="' .
                             $self->request()->parsed_uri->rpath() .
                             qq(/$root">$_</a><br>));
 }
@@ -238,15 +330,16 @@ sub print_root_list_footer {
 
 sub _print_sortable_headers {
     my $self = shift;
-    my ($uri_base, $criterion, $sort_direction, $headers, $sorting) = @_;
+    my ($uri_base, $criterion, $sort_direction, $headers, $sorting,
+        $th_css_class, $a_css_class) = @_;
     foreach my $header (@{ $headers}) {
 
-        $self->request()->print('<th>');
+        $self->request()->print(qq|<th class=$th_css_class>|);
 
         # check to see if this is a sortable field
         if (exists($sorting->{$header})) {
 
-            $self->request()->print(qq|<a href="$uri_base?o=|);
+            $self->request()->print(qq|<a class=$a_css_class href="$uri_base?o=|);
             $self->request()->print($sorting->{$header});
 
             if ($sorting->{$header} eq $criterion) {
@@ -267,15 +360,17 @@ sub print_directory_list_header {
     my $self = shift;
     my ($uri_base, $criterion, $sort_direction) = @_;
 
-    $self->request()->print('<table border=1 cellpadding=2 cellspacing=0>
-                                <tr>');
+    $self->request()->print('<table class=$css_class{directory_table}>
+                                <tr class=$css_class{directory_header_row}>');
 
     if ($self->file_sorting_available()) {
         $self->_print_sortable_headers($uri_base, $criterion, $sort_direction,
                                        \@directory_headers,
-                                       \%directory_sorting);
+                                       \%directory_sorting,
+                                       $css_class{directory_header},
+                                       $css_class{directory_sort_link});
     } else {
-        map { $self->request()->print("<th>$_</th>") } @directory_headers;
+        map { $self->request()->print("<th class=$css_class{directory_header}>$_</th>") } @directory_headers;
     }
 
     $self->request()->print('   </tr>');
@@ -283,49 +378,79 @@ sub print_directory_list_header {
 
 sub print_directory {
     my $self = shift;
-    my ($uri_base, $directory) = @_;
+    my ($uri_base, $directory, $row_number) = @_;
     my $uri = $uri_base. $directory->name();
-    $self->request()->print("<tr>
-                             <td><a href=$uri>" .
+    if ($row_number % 2) {
+        $self->request()->print("<tr class=$css_class{directory_odd_row}>");
+    } else {
+        $self->request()->print("<tr class=$css_class{directory_even_row}>");
+    }
+    $self->request()->print("<td class=$css_class{directory_data}>
+                            <a class=directory_link href=$uri>" .
                                   $directory->name() .
                                   '</a></td>
-                             <td>&nbsp;</td>
-                             <td>&nbsp;</td>
-                             <td>&nbsp;</td>
-                             <td>&nbsp;</td>
-                             <td>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
                              </tr>');
 }
 
 sub print_file {
     my $self = shift;
-    my ($uri_base, $file) = @_;
+    my ($uri_base, $file, $row_number) = @_;
     my $uri = $uri_base . $file->name();
     my $revision = $file->revision('last');
-    $self->request()->print('<tr>');
-    $self->request()->print("<td><a href=$uri>" . $file->name() . '</a></td>');
-    $self->request()->print('<td>' . $revision->author() . '</td>');
-    $self->request()->print('<td>' . $file->revision_count());
+    if ($row_number % 2) {
+        $self->request()->print("<tr class=$css_class{directory_odd_row}>");
+    } else {
+        $self->request()->print("<tr class=$css_class{directory_even_row}>");
+    }
+
+    $self->request()->print("<td class=$css_class{directory_data}>
+                                <a class=file_link href=$uri>"
+                                . $file->name() .
+                                '</a>
+                            </td>');
+    $self->request()->print('<td class=$css_class{directory_data}>'
+                            . $revision->author()
+                            . '</td>');
+    $self->request()->print('<td class=$css_class{directory_data}>'
+                            . $file->revision_count());
+
     if ($Apache::CVS::Graph) {
-        $self->request()->print(" (<a href=$uri?g>graph</a>)");
+        $self->request()->print(" (<a class=$css_class{graph_link} href=$uri?g>graph</a>)");
     }
     $self->request()->print('</td>');
-    $self->request()->print('<td>' . $revision->number() . '</td>');
-    $self->request()->print('<td>' . localtime($revision->date()) . '</td>');
+    $self->request()->print('<td class=$css_class{directory_data}>'
+                            . $revision->number()
+                            . '</td>');
+    $self->request()->print('<td class=$css_class{directory_data}>'
+                            . localtime($revision->date())
+                            . '</td>');
 
     my $age = join(', ',
                    map { $revision->age()->{$_} . ' ' . $_ } @time_units);
-    $self->request()->print("<td>$age</td>");
+    $self->request()->print("<td class=$css_class{directory_data}>$age</td>");
     $self->request()->print('</tr>');
 }
 
 sub print_plain_file() {
-    my $self = shift;
-    my $file = shift;
-    $self->request()->print('<tr><td>' . $file->name() . '</td>');
-    $self->request()->print('<td>&nbsp;</td> <td>&nbsp;</td>');
-    $self->request()->print('<td>&nbsp;</td> <td>&nbsp;</td>');
-    $self->request()->print('<td>&nbsp;</td> </tr>');
+    my ($self, $file, $row_number) = @_;
+    if ($row_number % 2) {
+        $self->request()->print("<tr class=$css_class{directory_odd_row}>");
+    } else {
+        $self->request()->print("<tr class=$css_class{directory_even_row}>");
+    }
+    $self->request()->print('<td class=$css_class{directory_data}>'
+                            . $file->name()
+                            . '</td>');
+    $self->request()->print('<td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td>
+                             <td class=$css_class{directory_data}>&nbsp;</td> </tr>');
 }
 
 sub print_directory_list_footer {
@@ -337,14 +462,16 @@ sub print_file_list_header {
     my $self = shift;
     my ($uri_base, $criterion, $sort_direction) = @_;
 
-    $self->request()->print('<table border=1 cellpadding=0 cellspacing=0>
-                             <tr>');
+    $self->request()->print('<table class=$css_class{file_table}>
+                             <tr class=$css_class{file_header_row}>');
 
     if ($self->revision_sorting_available()) {
         $self->_print_sortable_headers($uri_base, $criterion, $sort_direction,
-                                       \@file_headers, \%file_sorting);
+                                       \@file_headers, \%file_sorting,
+                                       $css_class{file_header},
+                                       $css_class{file_sort_link});
     } else {
-        map { $self->request()->print("<th>$_</th>") } @file_headers;
+        map { $self->request()->print("<th class=$css_class{file_header}>$_</th>") } @file_headers;
     }
     $self->request()->print('   </tr>');
 }
@@ -356,31 +483,47 @@ sub print_file_list_footer {
 
 sub print_revision {
     my $self = shift;
-    my ($uri_base, $revision, $diff_revision) = @_;
+    my ($uri_base, $revision, $row_number, $diff_revision) = @_;
     my $revision_uri = "$uri_base?r=" . $revision->number();
     my $date = localtime($revision->date());
     my $age = join(', ',
                    map { $revision->age()->{$_} . ' ' . $_ } @time_units);
     my $symbols = $revision->symbol();
-    my $symbol = '&nbsp;';
+    my $symbol = '';
     $symbol = join(', ', @{ $symbols}) if scalar @{ $symbols};
-    $self->request()->print("<tr>
-                             <td><a href=$revision_uri>" .
-                             $revision->number() . '</td>' .
-                             '<td>' . $revision->author() . '</td>' .
-                             '<td>' . $revision->state() . '</td>' .
-                             "<td>$symbol</td><td>$date</td><td>$age</td>" .
-                             '<td>' . $revision->comment() . '</td>');
+    if ($row_number % 2) {
+        $self->request()->print("<tr class=$css_class{file_odd_row}>");
+    } else {
+        $self->request()->print("<tr class=$css_class{file_even_row}>");
+    }
+    $self->request()->print("<td class=$css_class{file_data}>
+                                <a class=revision_link href=$revision_uri>" .
+                                $revision->number()
+                            . '</td>' .
+                            '<td class=$css_class{file_data}>'
+                                . $revision->author()
+                            . '</td>' .
+                            '<td class=$css_class{file_data}>'
+                                . $revision->state()
+                            . '</td>' .
+                             "<td class=$css_class{file_data}>$symbol</td>
+                            <td class=file_data>$date</td>
+                            <td class=file_data>$age</td>" .
+                             '<td class=$css_class{file_data}>'
+                                . $revision->comment()
+                            . '</td>');
     if ($diff_revision eq $revision->number()) {
-        $self->request()->print('<td>selected for diff</td>');
+        $self->request()->print('<td class=$css_class{file_data}>selected for diff</td>');
     } else {
         if ($diff_revision) {
-            $self->request()->print(qq|<td><a href="$uri_base?ds=| .
+            $self->request()->print(qq|<td class=$css_class{file_data}> 
+                                    <a class=diff_link href="$uri_base?ds=| .
                                     $revision->number()  .
                                     qq|&dt=$diff_revision">select for diff | .
                                     "with $diff_revision</a>");
         } else {
-            $self->request()->print(qq|<td><a href="$uri_base?ds=| .
+            $self->request()->print(qq|<td class=$css_class{file_data}>
+                                    <a class=diff_link href="$uri_base?ds=| .
                                     $revision->number()  .
                                     '">select for diff</a>');
         }
@@ -433,7 +576,7 @@ sub print_diff {
             $self->print_page_footer();
             return;
         }
-        $self->request()->print(qq|<td><a href="$uri_base?ds=$source_revision&dt=$target_revision&dy=$_">$_</a>&nbsp;|) foreach keys %{ $self->diff_styles()};
+        $self->request()->print(qq|<a class=diff_link href="$uri_base?ds=$source_revision&dt=$target_revision&dy=$_">$_</a>&nbsp;|) foreach keys %{ $self->diff_styles()};
         $self->request()->print(qq|<br>|);
     }
     $self->request()->print('<pre>');
@@ -447,7 +590,7 @@ sub print_diff {
 
 sub _print_tree_node {
     my ($self, $labels, $node, $uri) = @_;
-    $self->request()->print(qq(<a href="$uri?r=$node">$node</a>));
+    $self->request()->print(qq(<a class=$css_class{revision_link} href="$uri?r=$node">$node</a>));
     if (ref $labels eq 'HASH' && exists $labels->{$node} ) {
         my @tags = @{ $labels->{$node} };
         if (scalar @tags) {
