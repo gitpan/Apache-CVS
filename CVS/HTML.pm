@@ -1,4 +1,4 @@
-# $Id: HTML.pm,v 1.3 2002/04/23 04:18:28 barbee Exp $
+# $Id: HTML.pm,v 1.4 2002/09/17 06:24:27 barbee Exp $
 
 =head1 NAME
 
@@ -27,6 +27,7 @@ package Apache::CVS::HTML;
 use strict;
 
 use Apache::CVS();
+use Graph::Directed();
 @Apache::CVS::HTML::ISA = ('Apache::CVS');
 
 $Apache::CVS::HTML::VERSION = $Apache::CVS::VERSION;;
@@ -144,7 +145,8 @@ sub print_file {
     $self->request()->print('<tr>');
     $self->request()->print("<td><a href=$uri>" . $file->name() . '</a></td>');
     $self->request()->print('<td>' . $revision->author() . '</td>');
-    $self->request()->print('<td>' . $file->revision_count() . '</td>');
+    $self->request()->print('<td>' . $file->revision_count() .
+                            " (<a href=$uri?g>graph</a>)</td>");
     $self->request()->print('<td>' . $revision->number() . '</td>');
     $self->request()->print('<td>' . localtime($revision->date()) . '</td>');
 
@@ -273,6 +275,57 @@ sub print_diff {
         $line =~ s/>/&gt;/g;
         $self->request()->print($line);
     }
+    $self->request()->print('</pre>');
+}
+
+sub _print_tree_node {
+    my ($self, $labels, $node, $uri) = @_;
+    $self->request()->print(qq(<a href="$uri?r=$node">$node</a>));
+    if (ref $labels eq 'HASH' && exists $labels->{$node} ) {
+        my @tags = @{ $labels->{$node} };
+        if (scalar @tags) {
+            my $tags = join(', ', @tags);
+            $self->request()->print(" ($tags)");
+        }
+    }
+    $self->request()->print("\n");
+}
+
+sub _print_tree {
+    my ($self, $cvs_graph, $uri, $node, $prefix, $depth) = @_;
+    my $labels = $cvs_graph->labels();
+
+    # init
+    $depth ||= 0;
+    $prefix ||= [];
+    $node ||= $cvs_graph->root_node();
+
+    if ($depth) {
+        my $sub_depth = $depth - 1;
+        local $prefix->[$sub_depth] = '+-' if $prefix->[$sub_depth] eq '| ';
+        local $prefix->[$sub_depth] = '`-' if $prefix->[$sub_depth] eq '  ';
+        $self->request()->print(join('', @{ $prefix}[0..$sub_depth]));
+    }
+
+    $self->_print_tree_node($labels, $node, $uri);
+
+    $prefix->[$depth] = '| ';
+
+    my @children = $cvs_graph->graph()->successors($node);
+    my $size = scalar(@children) - 1;
+
+    for (0 .. $size) {
+        $prefix->[$depth] = '  ' if ($_ == $size);
+        $self->_print_tree($cvs_graph, $uri, $children[$_], $prefix, $depth+1);
+    }
+}
+
+sub print_graph {
+    my $self = shift;
+    my ($uri_base, $filename, $cvs_graph) = @_;
+
+    $self->request()->print("$uri_base<p><pre>");
+    $self->_print_tree($cvs_graph, "$uri_base/$filename");
     $self->request()->print('</pre>');
 }
 

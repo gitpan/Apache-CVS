@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.20 2002/04/23 04:18:28 barbee Exp $
+# $Id: CVS.pm,v 1.23 2002/09/17 06:32:52 barbee Exp $
 
 =head1 NAME
 
@@ -82,8 +82,9 @@ use Apache::CVS::Directory();
 use Apache::CVS::File();
 use Apache::CVS::Revision();
 use Apache::CVS::Diff();
+use Apache::CVS::Graph();
 
-$Apache::CVS::VERSION = '0.03';
+$Apache::CVS::VERSION = '0.04';
 
 =head1 SUBCLASSING
 
@@ -269,6 +270,16 @@ Takes an Apache::CVS::Diff object and a base uri.
 =cut
 
 sub print_diff {
+    return;
+}
+
+=item print_graph
+
+Takes a base uri and an Apache::CVS::Graph object.
+
+=cut
+
+sub print_graph {
     return;
 }
 
@@ -525,10 +536,10 @@ sub handle_file {
 
 sub handle_revision {
     my $self = shift;
-    my ($uri_base, $revision) = @_;
+    my ($uri_base, $revision_num) = @_;
     
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
-    my $revision = $file->revision($revision);
+    my $revision = $file->revision($revision_num);
 
     eval {
         if ($revision->is_binary()) {
@@ -537,7 +548,7 @@ sub handle_revision {
             $self->content_type($subrequest->content_type);
             $self->print_http_header();
             $self->request()->send_fd($revision->filehandle());
-            close $self->filehandle();
+            close $revision->filehandle();
         } else {
             $self->print_http_header();
             $self->print_page_header();
@@ -562,6 +573,15 @@ sub handle_diff {
     my $diff = Apache::CVS::Diff->new($source, $target,
                                       $self->diff_styles()->{$diff_style});
     $self->print_diff($diff, $uri_base . $file->name());
+}
+
+sub handle_graph {
+    my $self = shift;
+    $self->request()->log_error("Handling graph");
+    my $uri_base = shift;
+    my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
+    my $graph = Apache::CVS::Graph->new($file);
+    $self->print_graph($uri_base, $file->name(), $graph);
 }
 
 sub handler_internal {
@@ -618,6 +638,10 @@ sub handler_internal {
                                $uri_base);
         } elsif ( $is_revision ) {
             $self->handle_revision($uri_base, $query{'r'});
+        } elsif ( exists($query{'g'}) ) {
+            $self->print_http_header();
+            $self->print_page_header();
+            $self->handle_graph($uri_base, $query{'r'});
         } else {
             $self->print_http_header();
             $self->print_page_header();

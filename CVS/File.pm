@@ -1,4 +1,4 @@
-# $Id: File.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
+# $Id: File.pm,v 1.3 2002/09/17 06:20:51 barbee Exp $
 
 =head1 NAME
 
@@ -73,9 +73,26 @@ sub rcs_config {
     return $self->{rcs_config};
 }
 
+=item $versioned_file->rcs()
+
+Get an Rcs object associated with this file.
+
+=cut
+
 sub rcs {
     my $self = shift;
-    $self->{rcs} = shift if scalar @_;
+
+    if (scalar @_) {
+        $self->{rcs} = shift;
+        $self->rcs_stale(0);
+    }
+
+    # in case the path of our File has changed
+    if ((not $self->{rcs}) || $self->rcs_stale()) {
+        $self->{rcs} = _setup_rcs($self->path(), $self->rcs_config());
+        $self->rcs_stale(0);
+    }
+
     return $self->{rcs};
 }
 
@@ -150,12 +167,6 @@ sub revision {
     my $revision_number = undef;
     my @revisions;
 
-    # in case the path of our File has changed
-    if ((not $self->rcs()) || $self->rcs_stale()) {
-        $self->rcs(_setup_rcs($self->path(), $self->rcs_config()));
-        $self->rcs_stale(0);
-    }
-
     @revisions = $self->rcs()->revisions;
     $self->revision_count(scalar @revisions);
 
@@ -204,6 +215,7 @@ Returns the number of revision associated with this file.
 
 sub revision_count {
     my $self = shift;
+    $self->{revision_count} ||= $self->rcs()->revisions;
     return $self->{revision_count};
 }
 
