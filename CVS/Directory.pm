@@ -1,4 +1,4 @@
-# $Id: Directory.pm,v 1.2 2002/04/23 04:19:05 barbee Exp $
+# $Id: Directory.pm,v 1.3 2002/11/14 07:25:26 barbee Exp $
 
 =head1 NAME
 
@@ -88,7 +88,8 @@ sub load {
                              -X $self->path() . "/$_" && $_ } @contents;
     foreach my $path ( @directories ) {
         $self->push('directory',
-                    Apache::CVS::Directory->new($self->path() . "/$path"));
+                    Apache::CVS::Directory->new($self->path() . "/$path",
+                                                $self->rcs_config()));
     }
 
     my @files = grep { -f $self->path() . "/$_" &&

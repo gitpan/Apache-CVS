@@ -1,4 +1,4 @@
-# $Id: HTML.pm,v 1.5 2002/11/12 03:36:08 barbee Exp $
+# $Id: HTML.pm,v 1.8 2003/01/28 22:15:40 barbee Exp $
 
 =head1 NAME
 
@@ -27,12 +27,140 @@ package Apache::CVS::HTML;
 use strict;
 
 use Apache::CVS();
-use Graph::Directed();
+if ($Apache::CVS::Graph) {
+    use Graph::Directed();
+}
+
 @Apache::CVS::HTML::ISA = ('Apache::CVS');
 
 $Apache::CVS::HTML::VERSION = $Apache::CVS::VERSION;;
 
 my @time_units = ('days', 'hours', 'minutes', 'seconds');
+my @directory_headers = ('filename', 'author', 'number of revisions', 'latest revision', 'most recent revision date', 'revision age');
+my %directory_sorting = (
+    'filename' => 'f',
+    'author' => 'a',
+    'number of revisions' => 'n',
+    'most recent revision date' => 'm'
+);
+my @file_headers = ('revision number', 'author', 'state', 'symbol', 'date', 'age', 'comment', 'action');
+my %file_sorting = (
+    'revision number' => 'r',
+    'author' => 'a',
+    'state' => 's',
+    'date' => 'd',
+);
+
+sub new {
+    my $proto = shift;
+    my $class = ref($proto) || $proto;
+    my $self  = $class->SUPER::new(shift);
+
+    $self->file_sorting_available(1);
+    $self->revision_sorting_available(1);
+
+    bless ($self, $class);
+    return $self;
+}
+
+sub sort_files {
+    my $self = shift;
+    my ($files, $sort_criterion, $ascending) = @_;
+
+    # skip if there are no files
+    return unless scalar @{ $files };
+
+    my @sorted_files;
+    SWITCH: for ($sort_criterion) {
+        /$directory_sorting{'filename'}/ && do {
+            @sorted_files = sort { $a->name() cmp $b->name() } @{ $files };
+            last;
+        };
+        /$directory_sorting{'author'}/ && do {
+            @sorted_files = sort { $a->revision('last')->author() cmp
+                                   $b->revision('last')->author() } @{ $files };
+            last;
+        };
+        /$directory_sorting{'number of revisions'}/ && do {
+            @sorted_files =
+                sort { $a->revision_count() <=> $b->revision_count() }
+                    @{ $files };
+            last;
+        };
+        /$directory_sorting{'most recent revision date'}/ && do {
+            @sorted_files = sort { $a->revision('last')->date() <=>
+                                   $b->revision('last')->date() } @{ $files };
+            last;
+        };
+        @sorted_files = @{ $files };
+    }
+    @sorted_files = reverse @sorted_files if $ascending;
+    return \@sorted_files;
+}
+
+sub _split_revision {
+    my $revision = shift;
+    my @revision_parts;
+    while ($revision =~ s#^(\d+)##) {
+        push @revision_parts, $1;
+        $revision =~ s#^\.##;
+    }
+    return \@revision_parts;
+}
+
+sub _by_revision {
+    my $a_number = _split_revision($a->number());
+    my $b_number = _split_revision($b->number());
+
+    my $a_max_index = scalar @{ $a_number };
+    my $max_index = $a_max_index;
+    my $b_max_index = scalar @{ $b_number };
+    $max_index = $b_max_index if ($b_max_index < $max_index);
+    for (my $counter = 0; $counter < $max_index; $counter++) {
+        if ($a_number->[$counter] > $b_number->[$counter]) {
+            return 1;
+        } elsif ($a_number->[$counter] < $b_number->[$counter]) {
+            return -1;
+        } else {
+            next;
+        }
+    }
+    return $a_max_index <=> $b_max_index;
+}
+
+sub sort_revisions {
+    my $self = shift;
+    my ($revisions, $sort_criterion, $ascending) = @_;
+
+    # skip if there are no files
+    return unless scalar @{ $revisions};
+
+    my @sorted_revisions;
+    SWITCH: for ($sort_criterion) {
+        /$file_sorting{'revision number'}/ && do {
+            @sorted_revisions = sort _by_revision @{ $revisions };
+            last;
+        };
+        /$file_sorting{'author'}/ && do {
+            @sorted_revisions = sort { $a->author() cmp $b->author() }
+                                     @{ $revisions };
+            last;
+        };
+        /$file_sorting{'state'}/ && do {
+            @sorted_revisions = sort { $a->state() cmp $b->state() }
+                                @{ $revisions };
+            last;
+        };
+        /$file_sorting{'date'}/ && do {
+            @sorted_revisions = sort { $a->date() <=> $b->date() }
+                                @{ $revisions };
+            last;
+        };
+        @sorted_revisions = @{ $revisions };
+    }
+    @sorted_revisions = reverse @sorted_revisions if $ascending;
+    return \@sorted_revisions;
+}
 
 sub print_error {
     my $self = shift;
@@ -108,17 +236,49 @@ sub print_root_list_footer {
     return;
 }
 
+sub _print_sortable_headers {
+    my $self = shift;
+    my ($uri_base, $criterion, $sort_direction, $headers, $sorting) = @_;
+    foreach my $header (@{ $headers}) {
+
+        $self->request()->print('<th>');
+
+        # check to see if this is a sortable field
+        if (exists($sorting->{$header})) {
+
+            $self->request()->print(qq|<a href="$uri_base?o=|);
+            $self->request()->print($sorting->{$header});
+
+            if ($sorting->{$header} eq $criterion) {
+                # if we already sorting by this criterion, offer to sort the
+                # other way
+                my $ascending = ($sort_direction + 1) % 2;
+                $self->request()->print(qq|&asc=$ascending|);
+            }
+            $self->request()->print(qq|">$header</a>|);
+        } else {
+            $self->request()->print($header);
+        }
+        $self->request()->print('</th>');
+    }
+}
+
 sub print_directory_list_header {
     my $self = shift;
+    my ($uri_base, $criterion, $sort_direction) = @_;
+
     $self->request()->print('<table border=1 cellpadding=2 cellspacing=0>
-                                <tr>
-                                <th>filename</th>
-                                <th>author</th>
-                                <th>number of revisions</th>
-                                <th>latest revision</th>
-                                <th>most recent revision date</th>
-                                <th>revision age</th>
-                                </tr>');
+                                <tr>');
+
+    if ($self->file_sorting_available()) {
+        $self->_print_sortable_headers($uri_base, $criterion, $sort_direction,
+                                       \@directory_headers,
+                                       \%directory_sorting);
+    } else {
+        map { $self->request()->print("<th>$_</th>") } @directory_headers;
+    }
+
+    $self->request()->print('   </tr>');
 }
 
 sub print_directory {
@@ -145,8 +305,11 @@ sub print_file {
     $self->request()->print('<tr>');
     $self->request()->print("<td><a href=$uri>" . $file->name() . '</a></td>');
     $self->request()->print('<td>' . $revision->author() . '</td>');
-    $self->request()->print('<td>' . $file->revision_count() .
-                            " (<a href=$uri?g>graph</a>)</td>");
+    $self->request()->print('<td>' . $file->revision_count());
+    if ($Apache::CVS::Graph) {
+        $self->request()->print(" (<a href=$uri?g>graph</a>)");
+    }
+    $self->request()->print('</td>');
     $self->request()->print('<td>' . $revision->number() . '</td>');
     $self->request()->print('<td>' . localtime($revision->date()) . '</td>');
 
@@ -172,16 +335,18 @@ sub print_directory_list_footer {
 
 sub print_file_list_header {
     my $self = shift;
+    my ($uri_base, $criterion, $sort_direction) = @_;
+
     $self->request()->print('<table border=1 cellpadding=0 cellspacing=0>
-                             <tr>
-                                <th>revision number</th>
-                                <th>author</th>
-                                <th>state</th>
-                                <th>symbol</th>
-                                <th>date</th>
-                                <th>age</th>
-                                <th>comment</th>
-                                <th>action</th>');
+                             <tr>');
+
+    if ($self->revision_sorting_available()) {
+        $self->_print_sortable_headers($uri_base, $criterion, $sort_direction,
+                                       \@file_headers, \%file_sorting);
+    } else {
+        map { $self->request()->print("<th>$_</th>") } @file_headers;
+    }
+    $self->request()->print('   </tr>');
 }
 
 sub print_file_list_footer {
@@ -196,7 +361,9 @@ sub print_revision {
     my $date = localtime($revision->date());
     my $age = join(', ',
                    map { $revision->age()->{$_} . ' ' . $_ } @time_units);
-    my $symbol = $revision->symbol() || '&nbsp;';
+    my $symbols = $revision->symbol();
+    my $symbol = '&nbsp;';
+    $symbol = join(', ', @{ $symbols}) if scalar @{ $symbols};
     $self->request()->print("<tr>
                              <td><a href=$revision_uri>" .
                              $revision->number() . '</td>' .
@@ -324,7 +491,7 @@ sub print_graph {
     my $self = shift;
     my ($uri_base, $filename, $cvs_graph) = @_;
 
-    $self->request()->print("$uri_base<p><pre>");
+    $self->request()->print("<p><pre>");
     $self->_print_tree($cvs_graph, "$uri_base/$filename");
     $self->request()->print('</pre>');
 }

@@ -1,4 +1,4 @@
-# $Id: Revision.pm,v 1.3 2002/04/23 04:19:05 barbee Exp $
+# $Id: Revision.pm,v 1.5 2003/01/28 21:50:58 barbee Exp $
 
 =head1 NAME
 
@@ -46,14 +46,14 @@ sub _new_rcs {
         $self->{number} = $revision;
         $self->{author} = $rcs->author($self->{number});
         $self->{state} = $rcs->state($self->{number});
-        $self->{symbol} = $rcs->symbol($self->{number});
+        my @symbols = $rcs->symbol($self->{number});
+        $self->{symbol} = \@symbols;
         $self->{date} = $rcs->revdate($self->{number});
         my %comments = $rcs->comments;
         $self->{comment} = $comments{$self->{number}};
     };
     if ( $@ ) {
-        # don't throw exception in a constructor.
-#        die "Apache::CVS::Revision : Received error from Rcs: $@\n";
+        die "Apache::CVS::Revision : Received error from Rcs: $@\n";
     }
     return $self;
 }
@@ -246,7 +246,7 @@ sub content {
     $self->_checkout() unless $self->co_file();
     return undef if $self->is_binary();
     open FILE, $self->co_file();
-    my $content = join "\n", <FILE>;
+    my $content = join '', <FILE>;
     close FILE;
     return $content;
 }

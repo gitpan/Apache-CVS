@@ -1,6 +1,10 @@
-$Id: Changes,v 1.7 2002/11/12 03:38:00 barbee Exp $
+$Id: Changes,v 1.9 2003/01/28 22:27:47 barbee Exp $
 
 Revision history for Perl extension Apache::CVS.
+
+0.08  Tue Jan 28 22:27:01 PST 2003
+    - Allow certain functionality to be built or not built at make time.
+    - Added hooks for sorting.
 
 0.07
     - Fixed bug with graph when a file has more than 9 revisions.

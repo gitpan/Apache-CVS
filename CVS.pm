@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.27 2002/11/12 04:09:39 barbee Exp $
+# $Id: CVS.pm,v 1.32 2003/01/28 21:51:42 barbee Exp $
 
 =head1 NAME
 
@@ -82,9 +82,14 @@ use Apache::CVS::Directory();
 use Apache::CVS::File();
 use Apache::CVS::Revision();
 use Apache::CVS::Diff();
-use Apache::CVS::Graph();
+eval "use Apache::CVS::Graph();";
+if ($@) {
+    $Apache::CVS::Graph = 0;
+} else {
+    $Apache::CVS::Graph = 1;
+}
 
-$Apache::CVS::VERSION = '0.07';
+$Apache::CVS::VERSION = '0.08';
 
 =head1 SUBCLASSING
 
@@ -174,7 +179,9 @@ sub print_root_list_footer {
 
 =item print_directory_list_header
 
-No arguments.
+Takes a base uri, the sort criterion, and the sort direction (1 for ascending).
+Overriding method should check B<file_sorting_available()> to see if sorting
+controls should be provided.
 
 =cut
 
@@ -202,6 +209,17 @@ sub print_file {
     return;
 }
 
+=item sort_files
+
+Takes a reference to a list of Apache::CVS::Files, a criterion, and a sort
+direction (1 for ascending). This is called before printing.
+
+=cut
+
+sub sort_files {
+    return $_[1]
+}
+
 =item print_plain_file
 
 Takes a base uri and an Apache::CVS::PlainFile object.
@@ -224,7 +242,9 @@ sub print_directory_list_footer {
 
 =item print_file_list_header
 
-No arguments.
+Takes a base uri, the sort criterion, and the sort direction (1 for ascending).
+Overriding method should check B<revision_sorting_available()> to see if sorting
+controls should be provided.
 
 =cut
 
@@ -241,6 +261,17 @@ a revision that has been selected for diffing, if such exists.
 
 sub print_revision {
     return;
+}
+
+=item sort_revisions
+
+Takes a reference to a list of Apache::CVS::Revisions and a sort criterion.
+This is called before sorting.
+
+=cut
+
+sub sort_revisions {
+    return $_[1];
 }
 
 =item print_file_list_footer
@@ -275,7 +306,8 @@ sub print_diff {
 
 =item print_graph
 
-Takes a base uri and an Apache::CVS::Graph object.
+Takes a base uri and an Apache::CVS::Graph object. Only avaiable if built with
+--graph passed to Makefile.PL.
 
 =cut
 
@@ -359,6 +391,8 @@ sub new {
     $self->{diff_styles} = _get_diff_styles($self->{request});
     $self->{default_diff_style} =
         _get_default_diff_style($self->{request}, $self->{diff_styles});
+    $self->{file_sorting_available} = 0;
+    $self->{revision_sorting_available} = 0;
     bless ($self, $class);
     return $self;
 }
@@ -501,6 +535,32 @@ sub current_root_path {
     return $self->roots()->{$self->current_root()};
 }
 
+=item $self->file_sorting_available()
+
+Returns true if file sorting (in a directory) is implemented. Subclasses must 
+set this to true or false where as necessary.
+
+=cut
+
+sub file_sorting_available {
+    my $self = shift;
+    $self->{file_sorting_available} = shift if scalar @_;
+    return $self->{file_sorting_available};
+}
+
+=item $self->revision_sorting_available()
+
+Returns true if revision sorting (in a file) is implemented. Subclasses must 
+set this to true or false where as necessary.
+
+=cut
+
+sub revision_sorting_available {
+    my $self = shift;
+    $self->{revision_sorting_available} = shift if scalar @_;
+    return $self->{revision_sorting_available};
+}
+
 =back
 
 =cut
@@ -512,18 +572,25 @@ sub handle_root {
 
 sub handle_directory {
     my $self = shift;
-    my ($uri_base) = @_;
-    $self->print_directory_list_header();
+    my ($uri_base, $sort_criterion, $sort_direction) = @_;
+    $self->print_directory_list_header($uri_base, $sort_criterion,
+                                       $sort_direction);
     my $directory = Apache::CVS::Directory->new($self->path(),
                                                 $self->rcs_config());
     $directory->load();
-    my @blah = @{ $directory->directories() };
     foreach ( @{ $directory->directories() } ) {
         $self->print_directory($uri_base, $_);
     }
-    foreach ( @{ $directory->files() } ) {
+
+    my $sorted_files = $directory->files();
+    if ($self->file_sorting_available()) {
+        $sorted_files = $self->sort_files($directory->files(), $sort_criterion,
+                                          $sort_direction);
+    }
+    foreach ( @{ $sorted_files } ) {
         $self->print_file($uri_base, $_);
     }
+
     foreach ( @{ $directory->plain_files() } ) {
         $self->print_plain_file($_);
     }
@@ -532,12 +599,25 @@ sub handle_directory {
 
 sub handle_file {
     my $self = shift;
-    my ($uri_base, $diff_revision) = @_;
-    $self->print_file_list_header();
+    my ($uri_base, $diff_revision, $sort_criterion, $sort_direction) = @_;
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
-    while ( my $revision = $file->revision('prev') ) {
-        $self->print_revision("$uri_base" . $file->name(), $revision,
-                              $diff_revision);
+
+    $uri_base .= $file->name();
+    $self->print_file_list_header($uri_base, $sort_criterion, $sort_direction);
+
+    # if sorting available, go with new behavior
+    if ($self->revision_sorting_available()) {
+        my $sorted_revisions = $self->sort_revisions($file->revisions(),
+                                                     $sort_criterion,
+                                                     $sort_direction);
+        foreach ( @{ $sorted_revisions }) {
+            $self->print_revision($uri_base, $_, $diff_revision);
+        }
+    # otherwise, just use old behavior where we iterate through revisions
+    } else {
+        while ( my $revision = $file->revision('prev') ) {
+            $self->print_revision($uri_base, $revision, $diff_revision);
+        }
     }
     $self->print_file_list_footer();
 }
@@ -584,6 +664,7 @@ sub handle_diff {
 }
 
 sub handle_graph {
+    return unless $Apache::CVS::Graph;
     my $self = shift;
     my $uri_base = shift;
     my $file = Apache::CVS::File->new($self->path(), $self->rcs_config());
@@ -632,7 +713,7 @@ sub handler_internal {
         $self->print_http_header();
         $self->print_page_header();
         $uri_base .= q(/) unless $uri_base =~ /\/$/;
-        $self->handle_directory($uri_base);
+        $self->handle_directory($uri_base, $query{'o'}, $query{'asc'});
     } else {
 
         $uri_base =~ s/[^\/]*$//;
@@ -641,18 +722,19 @@ sub handler_internal {
         if ( $query{'ds'} && $query{'dt'} ) {
             $self->print_http_header();
             $self->print_page_header();
-            $self->handle_diff($query{'ds'}, $query{'dt'}, $query{dy},
+            $self->handle_diff($query{'ds'}, $query{'dt'}, $query{'dy'},
                                $uri_base);
         } elsif ( $is_revision ) {
             $self->handle_revision($uri_base, $query{'r'});
-        } elsif ( exists($query{'g'}) ) {
+        } elsif ( $Apache::CVS::Graph and exists($query{'g'}) ) {
             $self->print_http_header();
             $self->print_page_header();
             $self->handle_graph($uri_base, $query{'r'});
         } else {
             $self->print_http_header();
             $self->print_page_header();
-            $self->handle_file($uri_base, $query{'ds'});
+            $self->handle_file($uri_base, $query{'ds'}, $query{'o'},
+                               $query{'asc'});
         }
     }
 }

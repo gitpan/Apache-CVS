@@ -1,4 +1,4 @@
-# $Id: File.pm,v 1.4 2002/11/12 03:45:35 barbee Exp $
+# $Id: File.pm,v 1.5 2003/01/11 16:44:03 barbee Exp $
 
 =head1 NAME
 
@@ -147,6 +147,22 @@ sub rcs_stale {
     my $self = shift;
     $self->{rcs_stale} = shift if scalar @_;
     return $self->{rcs_stale};
+}
+
+=item $versioned_file->revisions()
+
+Returns a reference to a list of C<Apache::CVS::Revision> objects in no
+particular order.
+
+=cut
+
+sub revisions {
+    my $self = shift;
+
+    my @revisions = map {
+                        Apache::CVS::Revision->new($self->rcs(), $_)
+                    } $self->rcs()->revisions;
+    return \@revisions;
 }
 
 =item $versioned_file->revision($index)
