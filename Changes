@@ -1,6 +1,9 @@
-$Id: Changes,v 1.5 2002/09/22 03:54:17 barbee Exp $
+$Id: Changes,v 1.6 2002/09/22 14:50:59 barbee Exp $
 
 Revision history for Perl extension Apache::CVS.
+
+0.06  Sun Sep 22 07:31:09 PDT 2002
+    - Dammit. Copy and paste error in the Makefile.PL. One more time.
 
 0.05  Sat Sep 21 20:34:37 PDT 2002
     - Dammit. Forgot to include Apache::CVS::Graph.pm in the package

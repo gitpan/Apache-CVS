@@ -1,4 +1,4 @@
-# $Id: CVS.pm,v 1.24 2002/09/22 03:54:17 barbee Exp $
+# $Id: CVS.pm,v 1.25 2002/09/22 14:50:59 barbee Exp $
 
 =head1 NAME
 
@@ -84,7 +84,7 @@ use Apache::CVS::Revision();
 use Apache::CVS::Diff();
 use Apache::CVS::Graph();
 
-$Apache::CVS::VERSION = '0.05';
+$Apache::CVS::VERSION = '0.06';
 
 =head1 SUBCLASSING
 
