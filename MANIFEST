@@ -4,6 +4,7 @@ MANIFEST
 Makefile.PL
 test.pl
 httpd.conf
+apache_cvs.css
 CVS/Diff.pm
 CVS/Directory.pm
 CVS/File.pm

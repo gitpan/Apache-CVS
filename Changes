@@ -2,6 +2,9 @@ $Id: Changes,v 1.10 2003/12/07 00:01:54 barbee Exp $
 
 Revision history for Perl extension Apache::CVS.
 
+0.10  Sun Dec 14 19:46:34 EST 2003
+    - Dammit. Forgot to include the default CSS file.
+
 0.09  Sat Dec  6 19:00:29 PST 2003
     - Added CSS support to Apache::CVS::HTML.
 

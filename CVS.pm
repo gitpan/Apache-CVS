@@ -91,7 +91,7 @@ if ($@) {
     $Apache::CVS::Graph = 1;
 }
 
-$Apache::CVS::VERSION = '0.09';
+$Apache::CVS::VERSION = '0.10';
 
 =head1 SUBCLASSING
 
