@@ -7,6 +7,7 @@ httpd.conf
 CVS/Diff.pm
 CVS/Directory.pm
 CVS/File.pm
+CVS/Graph.pm
 CVS/HTML.pm
 CVS/PlainFile.pm
 CVS/RcsConfig.pm

@@ -1,6 +1,10 @@
-$Id: Changes,v 1.4 2002/09/17 06:29:27 barbee Exp $
+$Id: Changes,v 1.5 2002/09/22 03:54:17 barbee Exp $
 
 Revision history for Perl extension Apache::CVS.
+
+0.05  Sat Sep 21 20:34:37 PDT 2002
+    - Dammit. Forgot to include Apache::CVS::Graph.pm in the package
+      and CPAN won't let me replace the file.
 
 0.04  Mon Sep 16 23:09:36 PDT 2002
     - Added support for graphs of cvs revisions.

@@ -1,4 +1,4 @@
-# $Id: Makefile.PL,v 1.3 2002/02/10 04:11:17 barbee Exp $
+# $Id: Makefile.PL,v 1.4 2002/09/17 14:42:27 barbee Exp $
 require 5.004;
 use strict;
 
@@ -18,6 +18,7 @@ WriteMakefile(
             'CVS/HTML.pm'      => '$(INST_LIBDIR)/CVS/HTML.pm',
             'CVS/Diff.pm'      => '$(INST_LIBDIR)/CVS/Diff.pm',
             'CVS/File.pm'      => '$(INST_LIBDIR)/CVS/File.pm',
+            'CVS/File.pm'      => '$(INST_LIBDIR)/CVS/Graph.pm',
             'CVS/Directory.pm' => '$(INST_LIBDIR)/CVS/Directory.pm',
             'CVS/PlainFile.pm' => '$(INST_LIBDIR)/CVS/PlainFile.pm',
             'CVS/RcsConfig.pm' => '$(INST_LIBDIR)/CVS/RcsConfig.pm',
